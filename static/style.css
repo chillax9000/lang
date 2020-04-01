@@ -14,9 +14,21 @@ html {
     height: 100%;
 }
 
+.line-pair {
+    padding: 1em;
+}
+
 .line {
     padding-top: .5em;
     padding-bottom: .5em;
+    cursor: default;
+}
+
+.source {
+    color: #8c8c8c;
+}
+
+.target {
 }
 
 .word {

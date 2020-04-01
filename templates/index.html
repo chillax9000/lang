@@ -1,0 +1,35 @@
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="{{ url_for("static", filename="style.css") }}">
+</head>
+<script>
+    function showFamily(gpName) {
+        var words = document.getElementsByClassName(gpName);
+        for (word of words) {
+            word.style.backgroundColor = "yellow";
+        }
+    }
+    
+    function clearWords() {
+        for (word of document.getElementsByClassName("word")) {
+            word.style.backgroundColor = "transparent"; 
+        }
+    }
+</script>
+<div class="textmain">
+    <div class="flex-container">
+        {% for line in text_src %}
+        <div class="line">
+            {% for word, gp in line %}
+            <span class="word gp-{{ gp }}" onmouseover="showFamily('gp-{{ gp }}')" onmouseout="clearWords()">{{ word }}</span>
+            {% endfor %}
+        </div>
+        <div class="line">
+            {% for word, gp in text_tgt[loop.index0] %}
+            <span class="word gp-{{ gp }}" onmouseover="showFamily('gp-{{ gp }}')" onmouseout="clearWords()">{{ word }}</span>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+</html>

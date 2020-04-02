@@ -57,24 +57,44 @@ class Sentence:
             win.addstr(" ")
         win.refresh()
 
-    def next(self):
-        self.active = min(len(self.words), self.active + 1)
+    def activate_closest_selectable(self, idx):
+        if idx >= len(self.words):
+            idx = len(self.words) - 1
+        if self.words_status[idx] < 2:
+            self.activate(idx)
+        else:
+            idx_next = self.next_nofixed(idx)
+            idx_prev = self.prev_nofixed(idx)
+            if idx - idx_prev < idx_next - idx:
+                self.activate(idx_prev)
+            else:
+                self.activate(idx_next)
 
-    def prev(self):
-        self.active = max(0, self.active - 1)
+    def activate(self, idx):
+        self.active = idx
 
-    def next_nofixed(self):
-        i, _ = find_first(self.words_status[self.active+1:],
+    def next(self, idx=None):
+        idx = self.active if idx is None else idx
+        return min(len(self.words), idx + 1)
+
+    def prev(self, idx=None):
+        idx = self.active if idx is None else idx
+        return max(0, idx - 1)
+
+    def next_nofixed(self, idx=None):
+        idx = self.active if idx is None else idx
+        i, _ = find_first(self.words_status[idx + 1:],
                           lambda status: status < 2,
                           (-1, None))
-        self.active += i + 1
+        return idx + i + 1
 
-    def prev_nofixed(self):
-        idxs = [s for i, s in enumerate(self.words_status) if i < self.active]
+    def prev_nofixed(self, idx=None):
+        idx = self.active if idx is None else idx
+        idxs = [s for i, s in enumerate(self.words_status) if i < idx]
         i, _ = find_first(idxs[::-1],
                           lambda status: status < 2,
                           (-1, None))
-        self.active -= i + 1
+        return idx - i - 1
 
     def add_to_selection(self, *idxs):
         for idx in idxs:
@@ -97,24 +117,38 @@ class Sentence:
     def selection_idxs(self):
         return [i for i, s in enumerate(self.words_status) if s == 1]
 
+    def word_at_char(self, char_idx):
+        total = 0
+        for i, word in enumerate(self.words):
+            total += len(word) + 1
+            if total > char_idx:
+                return i
+        return len(self.words) - 1
+
+    def char_at_word(self, word_idx):
+        return sum(list(map(lambda w: len(w) + 1, self.words[:word_idx])))
+
 
 class Correspondance:
     def __init__(self, corresps):
         self.source = tuple(corresps)
-        self.diffs = []
+        self._current = list(self.source)
 
     @property
     def current(self):
-        return self.source + tuple(self.diffs)
+        return tuple(self._current)
+
+    def restore(self):
+        self._current = list(self.source)
 
     def clear(self):
-        self.diffs = []
+        self._current = []
 
     def pop(self):
-        return self.diffs.pop()
+        return self._current.pop()
 
     def add(self, value):
-        self.diffs.append(value)
+        self._current.append(value)
 
 
 
@@ -152,17 +186,18 @@ def main(stdscr, sentences, correspondance):
 
         ## moving
         if c in (ord("l"), curses.KEY_RIGHT):
-            sentence.next_nofixed()
+            sentence.activate(sentence.next_nofixed())
         if c in (ord("h"), curses.KEY_LEFT):
-            sentence.prev_nofixed()
+            sentence.activate(sentence.prev_nofixed())
         if c in (ord("L"), ):
-            sentence.next()
+            sentence.activate(sentence.next())
         if c in (ord("H"), ):
-            sentence.prev()
+            sentence.activate(sentence.prev())
         if c in (ord("k"), ord("j")):
-            cur_active = sentence.active
+            char_idx = sentence.char_at_word(sentence.active)
             s_idx = (s_idx + 1) % 2
-            sentences[s_idx].active = cur_active
+            sentences[s_idx].activate_closest_selectable(
+                sentences[s_idx].word_at_char(char_idx))
 
         ## selecting
         if c in (ord("s"), ):
@@ -171,13 +206,13 @@ def main(stdscr, sentences, correspondance):
             for sentence in sentences:
                 sentence.clear_selection()
         if c in (curses.KEY_ENTER, 10, 13):  # \n, \r
-            selections = (sentences[0].selection_idxs(), sentences[1].selection_idxs())
+            selections = (sentences[0].selection_idxs(),
+                          sentences[1].selection_idxs())
             if selections[0] or selections[1]:
                 correspondance.add(selections)
             for sentence in sentences:
                 sentence.fix_selection()
-                if sentence.words_status[sentence.active] == 2:
-                    sentence.next_nofixed()
+                sentence.activate_closest_selectable(sentence.active)
         if c in (curses.KEY_BACKSPACE, ):
             try:
                 selections_removed = correspondance.pop()
@@ -200,8 +235,8 @@ def tag_manually(sentences, corresps):
 if __name__ == "__main__":
     inp0 = input()
     inp1 = input()
-    inp0 = inp0 if inp0 else "Le chat mange la souris ."
-    inp1 = inp1 if inp1 else "The cat eats the mouse ."
+    inp0 = inp0 if inp0 else "Hier , le chat a mangé la souris verte ."
+    inp1 = inp1 if inp1 else "Yesterday , the cat ate the green mouse ."
     tokens0 = tokenize(inp0)
     tokens1 = tokenize(inp1)
     sentences = [
@@ -209,6 +244,12 @@ if __name__ == "__main__":
         Sentence(tokens1)
     ]
 
-    corresps = tuple(tag_manually(sentences, []))
+    corresps = (([2, 3], [2, 3]), )
+    for corresp in corresps:
+        for selection, sentence in zip(corresp, sentences):
+            sentence.add_to_selection(*selection)
+            sentence.fix_selection()
 
-    print(corresps)
+    new_corresps = tuple(tag_manually(sentences, corresps))
+
+    print(new_corresps)

@@ -44,6 +44,9 @@ class Sentence:
             2: "fixed",
         }[i]
 
+    def set_status(self, idx, status):
+        self.words_status[idx] = status
+
     def draw(self, win, color_map, active=False):
         win.clear()
         for i, word in enumerate(self.words):
@@ -79,14 +82,14 @@ class Sentence:
                 self.words_status[idx] = (self.words_status[idx] + 1) % 2
 
     def clear_selection(self):
-        def clear(s):
+        def _process(s):
             return 0 if s == 1 else s
-        self.words_status = list(map(clear, self.words_status))
+        self.words_status = list(map(_process, self.words_status))
 
     def fix_selection(self):
-        def fix(s):
+        def _process(s):
             return 2 if s == 1 else s
-        self.words_status = list(map(fix, self.words_status))
+        self.words_status = list(map(_process, self.words_status))
 
     def selection(self):
         return [self.words[i] for i, s in enumerate(self.words_status) if s == 1]
@@ -95,7 +98,27 @@ class Sentence:
         return [i for i, s in enumerate(self.words_status) if s == 1]
 
 
-def main(stdscr, sentences, corresps):
+class Correspondance:
+    def __init__(self, corresps):
+        self.source = tuple(corresps)
+        self.diffs = []
+
+    @property
+    def current(self):
+        return self.source + tuple(self.diffs)
+
+    def clear(self):
+        self.diffs = []
+
+    def pop(self):
+        return self.diffs.pop()
+
+    def add(self, value):
+        self.diffs.append(value)
+
+
+
+def main(stdscr, sentences, correspondance):
     stdscr.clear()
     stdscr.refresh()
 
@@ -116,7 +139,7 @@ def main(stdscr, sentences, corresps):
         win_sel.clear()
         win_sel.addstr(0, 0, " ".join(sentences[0].selection()) + " | " +
                        " ".join(sentences[1].selection()))
-        win_sel.addstr(1, 0, repr(corresps))
+        win_sel.addstr(1, 0, repr(correspondance.current))
         win_sel.refresh()
 
         # input
@@ -148,29 +171,44 @@ def main(stdscr, sentences, corresps):
             for sentence in sentences:
                 sentence.clear_selection()
         if c in (curses.KEY_ENTER, 10, 13):  # \n, \r
-            corresps.append(
-                (sentences[0].selection_idxs(), sentences[1].selection_idxs())
-            )
+            selections = (sentences[0].selection_idxs(), sentences[1].selection_idxs())
+            if selections[0] or selections[1]:
+                correspondance.add(selections)
             for sentence in sentences:
                 sentence.fix_selection()
+                if sentence.words_status[sentence.active] == 2:
+                    sentence.next_nofixed()
+        if c in (curses.KEY_BACKSPACE, ):
+            try:
+                selections_removed = correspondance.pop()
+                for sentence, selection in zip(sentences, selections_removed):
+                    sentence.clear_selection()
+                    for i in selection:
+                        sentence.set_status(i, 1)
+            except IndexError:
+                pass
+
+
 
 
 def tag_manually(sentences, corresps):
-    if isinstance(corresps, tuple):
-        corresps = list(corresps)
-    curses.wrapper(lambda stdscr: main(stdscr, sentences, corresps))
-    return corresps
+    correspondance = Correspondance(corresps)
+    curses.wrapper(lambda stdscr: main(stdscr, sentences, correspondance))
+    return correspondance.current
 
 
 if __name__ == "__main__":
-    sent0 = "Le chat mange la souris ."
-    sent1 = "The cat eats the mouse ."
+    inp0 = input()
+    inp1 = input()
+    inp0 = inp0 if inp0 else "Le chat mange la souris ."
+    inp1 = inp1 if inp1 else "The cat eats the mouse ."
+    tokens0 = tokenize(inp0)
+    tokens1 = tokenize(inp1)
     sentences = [
-        Sentence(tokenize(sent0)),
-        Sentence(tokenize(sent1)),
+        Sentence(tokens0),
+        Sentence(tokens1)
     ]
 
-    corresps = tag_manually(sentences, [])
+    corresps = tuple(tag_manually(sentences, []))
 
     print(corresps)
-    _ = input()

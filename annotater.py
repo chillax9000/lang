@@ -1,4 +1,6 @@
 import curses
+import tempfile
+import subprocess
 
 
 def get_color_map():
@@ -17,10 +19,6 @@ def get_color_map():
         color_map[f"{name}_active"] = curses.color_pair(2*i + 2)
 
     return color_map
-
-
-def tokenize(sent):
-    return sent.split()
 
 
 def find_first(xs, cond, fail_return):
@@ -46,16 +44,6 @@ class Sentence:
 
     def set_status(self, idx, status):
         self.words_status[idx] = status
-
-    def draw(self, win, color_map, active=False):
-        win.clear()
-        for i, word in enumerate(self.words):
-            is_active = active and i == self.active
-            color = color_map[self.status_name(self.words_status[i])
-                              + "_active" * is_active]
-            win.addstr(word, color)
-            win.addstr(" ")
-        win.refresh()
 
     def activate_closest_selectable(self, idx):
         if idx >= len(self.words):
@@ -128,6 +116,27 @@ class Sentence:
     def char_at_word(self, word_idx):
         return sum(list(map(lambda w: len(w) + 1, self.words[:word_idx])))
 
+    def split(self):
+        text = " ".join(self.words)
+        with tempfile.NamedTemporaryFile() as buffer:
+            buffer_path = buffer.name
+
+            with open(buffer_path, "w") as f:
+                f.write(text)
+
+            cmd = ["editor", buffer_path]
+            subprocess.run(cmd)
+
+            with open(buffer_path, "r") as f:
+                text_out = f.read()
+
+        words = text_out.split()
+        if self.words != words:
+            self.words = words
+            self.words_status = [0 for _ in self.words]
+            return True
+        return False
+
 
 class Correspondance:
     def __init__(self, corresps):
@@ -151,6 +160,16 @@ class Correspondance:
         self._current.append(value)
 
 
+def draw(win, sentence, color_map, active=False):
+    win.clear()
+    for i, word in enumerate(sentence.words):
+        is_active = active and i == sentence.active
+        color = color_map[sentence.status_name(sentence.words_status[i])
+                          + "_active" * is_active]
+        win.addstr(word, color)
+        win.addstr(" ")
+    win.refresh()
+
 
 def main(stdscr, sentences, correspondance):
     stdscr.clear()
@@ -168,7 +187,7 @@ def main(stdscr, sentences, correspondance):
         # draw
         for i, (sentence, win) in enumerate(zip(sentences,
                                                 (win_sent0, win_sent1))):
-            sentence.draw(win, color_map=color_map, active=(s_idx == i))
+            draw(win, sentence, color_map=color_map, active=(s_idx == i))
 
         win_sel.clear()
         win_sel.addstr(0, 0, " ".join(sentences[0].selection()) + " | " +
@@ -223,33 +242,45 @@ def main(stdscr, sentences, correspondance):
             except IndexError:
                 pass
 
+        ## tokenizing
+        if c in (ord("i"), ):
+            changed = sentence.split()
+            if changed:
+                for sentence in sentences:
+                    sentence.words_status = [0 for _ in sentence.words]
+                correspondance.clear()
 
 
-
-def tag_manually(sentences, corresps):
-    correspondance = Correspondance(corresps)
-    curses.wrapper(lambda stdscr: main(stdscr, sentences, correspondance))
-    return correspondance.current
-
-
-if __name__ == "__main__":
-    inp0 = input()
-    inp1 = input()
-    inp0 = inp0 if inp0 else "Hier , le chat a mangé la souris verte ."
-    inp1 = inp1 if inp1 else "Yesterday , the cat ate the green mouse ."
-    tokens0 = tokenize(inp0)
-    tokens1 = tokenize(inp1)
+def process_manually(tokens0, tokens1, map_):
     sentences = [
         Sentence(tokens0),
         Sentence(tokens1)
     ]
-
-    corresps = (([2, 3], [2, 3]), )
-    for corresp in corresps:
+    for corresp in map_:
         for selection, sentence in zip(corresp, sentences):
             sentence.add_to_selection(*selection)
             sentence.fix_selection()
+    correspondance = Correspondance(map_)
 
-    new_corresps = tuple(tag_manually(sentences, corresps))
+    curses.wrapper(lambda stdscr: main(stdscr, sentences, correspondance))
 
+    return sentences[0].words, sentences[1].words, correspondance.current
+
+
+if __name__ == "__main__":
+    def tokenize(sent):
+        return sent.split()
+
+    inp0 = "Hier , le chat a mangé la souris verte ."
+    inp1 = "Yesterday , the cat ate the green mouse ."
+    tokens0 = tokenize(inp0)
+    tokens1 = tokenize(inp1)
+
+    map_ = (([2, 3], [2, 3]), )
+
+    tokens0, tokens1, new_corresps = \
+        tuple(process_manually(tokens0, tokens1, map_))
+
+    print(tokens0)
+    print(tokens1)
     print(new_corresps)

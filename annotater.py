@@ -12,11 +12,13 @@ def get_color_map():
 
     color_map = {}
     for i, (name, color) in enumerate(color_base.items()):
-        curses.init_pair(2*i + 1, color, curses.COLOR_BLACK)
-        curses.init_pair(2*i + 2, curses.COLOR_BLACK, color)
+        curses.init_pair(3*i + 1, color, curses.COLOR_BLACK)
+        curses.init_pair(3*i + 2, curses.COLOR_BLACK, color)
+        curses.init_pair(3*i + 3, curses.COLOR_YELLOW, curses.COLOR_BLACK)
 
-        color_map[name] = curses.color_pair(2*i + 1)
-        color_map[f"{name}_active"] = curses.color_pair(2*i + 2)
+        color_map[name] = curses.color_pair(3*i + 1)
+        color_map[f"{name}_active"] = curses.color_pair(3*i + 2)
+        color_map[f"{name}_active_waiting"] = curses.color_pair(3*i + 3)
 
     return color_map
 
@@ -167,9 +169,9 @@ class Correspondance:
 def draw(win, sentence, color_map, active=False):
     win.clear()
     for i, word in enumerate(sentence.words):
-        is_active = active and i == sentence.active
         color = color_map[sentence.status_name(sentence.words_status[i])
-                          + "_active" * is_active]
+                          + "_active" * (i == sentence.active)
+                          + "_waiting" * (not active and i == sentence.active)]
         win.addstr(word, color)
         win.addstr(" ")
     win.refresh()
@@ -244,7 +246,9 @@ def main(stdscr, sentences, correspondance):
         if c in (ord("k"), ):
             cursor = up(cursor, width)
             sentence.activate(sentence.word_at_char(cursor))
-        if c in (ord("\t"), ord("K"), ord("J")):
+        if c in (ord("\t"), ):
+            s_idx = (s_idx + 1) % len(sentences)
+        if c in (ord("K"), ord("J")):
             char_idx = sentence.char_at_word(sentence.active)
             s_idx = (s_idx + 1) % len(sentences)
             sentences[s_idx].activate_closest_selectable(

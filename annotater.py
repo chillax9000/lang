@@ -34,6 +34,10 @@ class Sentence:
         self.words_status = [0 for _ in self.words]
         self.active = 0
 
+    @property
+    def char_len(self):
+        return sum(list(map(lambda w: len(w) + 1, self.words)))
+
     @staticmethod
     def status_name(i):
         return {
@@ -177,16 +181,21 @@ def main(stdscr, sentences, correspondance):
 
     s_idx = 0
     width = 100
-    win_sent0 = curses.newwin(1, width, 0, 0)
-    win_sent1 = curses.newwin(1, width, 1, 0)
-    win_sel = curses.newwin(2, width, 3, 0)
+    windows = []
+    line = 0
+    for sentence in sentences:
+        height = sentence.char_len // width + 1
+        windows.append(curses.newwin(height, width, line, 0))
+        line += height
+    win_sel = curses.newwin(2, width, line, 0)
 
     color_map = get_color_map()
+    cursor = 0
 
     while True:
         # draw
         for i, (sentence, win) in enumerate(zip(sentences,
-                                                (win_sent0, win_sent1))):
+                                                (windows[0], windows[1]))):
             draw(win, sentence, color_map=color_map, active=(s_idx == i))
 
         win_sel.clear()
@@ -195,6 +204,18 @@ def main(stdscr, sentences, correspondance):
         map_cur = repr(correspondance.current)
         win_sel.addstr(1, 0, map_cur[:width - 4] + "..." * (len(map_cur) > width))
         win_sel.refresh()
+
+        def down(cursor, width, n_chars):
+            next_cursor = cursor + width
+            if next_cursor < n_chars:
+                return next_cursor
+            return cursor
+
+        def up(cursor, width):
+            next_cursor = cursor - width
+            if next_cursor >= 0:
+                return next_cursor
+            return cursor
 
         # input
         sentence = sentences[s_idx]
@@ -207,15 +228,25 @@ def main(stdscr, sentences, correspondance):
         ## moving
         if c in (ord("l"), curses.KEY_RIGHT):
             sentence.activate(sentence.next_nofixed())
+            cursor = sentence.char_at_word(sentence.active)
         if c in (ord("h"), curses.KEY_LEFT):
             sentence.activate(sentence.prev_nofixed())
+            cursor = sentence.char_at_word(sentence.active)
         if c in (ord("L"), ):
             sentence.activate(sentence.next())
+            cursor = sentence.char_at_word(sentence.active)
         if c in (ord("H"), ):
             sentence.activate(sentence.prev())
-        if c in (ord("k"), ord("j")):
+            cursor = sentence.char_at_word(sentence.active)
+        if c in (ord("j"), ):
+            cursor = down(cursor, width, sentence.char_len)
+            sentence.activate(sentence.word_at_char(cursor))
+        if c in (ord("k"), ):
+            cursor = up(cursor, width)
+            sentence.activate(sentence.word_at_char(cursor))
+        if c in (ord("\t"), ord("K"), ord("J")):
             char_idx = sentence.char_at_word(sentence.active)
-            s_idx = (s_idx + 1) % 2
+            s_idx = (s_idx + 1) % len(sentences)
             sentences[s_idx].activate_closest_selectable(
                 sentences[s_idx].word_at_char(char_idx))
 

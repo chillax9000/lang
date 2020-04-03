@@ -265,16 +265,15 @@ def main(stdscr, sentences, correspondance):
                           sentences[1].selection_idxs())
             if selections[0] or selections[1]:
                 correspondance.add(selections)
-            for sentence in sentences:
-                sentence.fix_selection()
-                sentence.activate_closest_selectable(sentence.active)
+                for sentence in sentences:
+                    sentence.fix_selection()
+                    sentence.activate_closest_selectable(sentence.active)
         if c in (curses.KEY_BACKSPACE, ):
             try:
                 selections_removed = correspondance.pop()
                 for sentence, selection in zip(sentences, selections_removed):
                     sentence.clear_selection()
-                    for i in selection:
-                        sentence.set_status(i, 1)
+                    sentence.add_to_selection(selection)
             except IndexError:
                 pass
 

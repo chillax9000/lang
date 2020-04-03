@@ -176,10 +176,10 @@ def main(stdscr, sentences, correspondance):
     stdscr.refresh()
 
     s_idx = 0
-
-    win_sent0 = curses.newwin(1, 100, 0, 0)
-    win_sent1 = curses.newwin(1, 100, 1, 0)
-    win_sel = curses.newwin(2, 100, 3, 0)
+    width = 100
+    win_sent0 = curses.newwin(1, width, 0, 0)
+    win_sent1 = curses.newwin(1, width, 1, 0)
+    win_sel = curses.newwin(2, width, 3, 0)
 
     color_map = get_color_map()
 
@@ -192,7 +192,8 @@ def main(stdscr, sentences, correspondance):
         win_sel.clear()
         win_sel.addstr(0, 0, " ".join(sentences[0].selection()) + " | " +
                        " ".join(sentences[1].selection()))
-        win_sel.addstr(1, 0, repr(correspondance.current))
+        map_cur = repr(correspondance.current)
+        win_sel.addstr(1, 0, map_cur[:width - 4] + "..." * (len(map_cur) > width))
         win_sel.refresh()
 
         # input

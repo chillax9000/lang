@@ -188,12 +188,12 @@ def draw(win, sentence, color_map, active=False):
                           + "_waiting" * (not active and i == sentence.active)]
         win.addstr(word, color)
         win.addstr(" ")
-    win.refresh()
+    win.noutrefresh()
 
 
 def main(stdscr, sentences, correspondance):
     stdscr.clear()
-    stdscr.refresh()
+    stdscr.noutrefresh()
 
     s_idx = 0
     width = 80
@@ -210,8 +210,7 @@ def main(stdscr, sentences, correspondance):
 
     while True:
         # draw
-        for i, (sentence, win) in enumerate(zip(sentences,
-                                                (windows[0], windows[1]))):
+        for i, (sentence, win) in enumerate(zip(sentences, windows)):
             draw(win, sentence, color_map=color_map, active=(s_idx == i))
 
         win_sel.clear()
@@ -219,7 +218,7 @@ def main(stdscr, sentences, correspondance):
                        " ".join(sentences[1].selection()))
         map_cur = repr(correspondance.current)
         win_sel.addstr(1, 0, map_cur[:width - 4] + "..." * (len(map_cur) > width))
-        win_sel.refresh()
+        win_sel.noutrefresh()
 
         def down(cursor, width, n_chars):
             next_cursor = cursor + width
@@ -232,6 +231,8 @@ def main(stdscr, sentences, correspondance):
             if next_cursor >= 0:
                 return next_cursor
             return cursor
+
+        curses.doupdate()
 
         # input
         sentence = sentences[s_idx]

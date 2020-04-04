@@ -14,7 +14,7 @@ def get_color_map():
     for i, (name, color) in enumerate(color_base.items()):
         curses.init_pair(3*i + 1, color, curses.COLOR_BLACK)
         curses.init_pair(3*i + 2, curses.COLOR_BLACK, color)
-        curses.init_pair(3*i + 3, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+        curses.init_pair(3*i + 3, curses.COLOR_BLUE, curses.COLOR_BLACK)
 
         color_map[name] = curses.color_pair(3*i + 1)
         color_map[f"{name}_active"] = curses.color_pair(3*i + 2)
@@ -180,45 +180,60 @@ class Correspondance:
         self._current.append(value)
 
 
-def draw(win, sentence, color_map, active=False):
-    win.clear()
+def update_pad(pad, sentence, color_map, active=False):
+    pad.clear()
     for i, word in enumerate(sentence.words):
         color = color_map[sentence.status_name(sentence.words_status[i])
                           + "_active" * (i == sentence.active)
                           + "_waiting" * (not active and i == sentence.active)]
-        win.addstr(word, color)
-        win.addstr(" ")
-    win.noutrefresh()
+        pad.addstr(word, color)
+        pad.addstr(" ")
+
+
+def refresh_pad(pad, start_line, n_lines, pos_h, width):
+    pad.noutrefresh(start_line, 0, pos_h, 0, pos_h + n_lines-1, width)
 
 
 def main(stdscr, sentences, correspondance):
     stdscr.clear()
     stdscr.noutrefresh()
 
+    max_display_height = 11
     s_idx = 0
     width = 80
-    windows = []
-    line = 0
+    pads_sent = []
+    heights = []
     for sentence in sentences:
-        height = sentence.char_len // width + 1
-        windows.append(curses.newwin(height, width, line, 0))
-        line += height
-    win_sel = curses.newwin(2, width, line, 0)
+        heights.append(sentence.char_len // width + 1)
+        pads_sent.append(curses.newpad(heights[-1], width))
+    display_heights = [min(h, max_display_height) for h in heights]
+    win_select = curses.newwin(2, width, sum(display_heights) + 2, 0)
+    win_map = curses.newwin(1, width, sum(display_heights) + 3 + len(sentences), 0)
+    # todo: replace wins by pads
 
     color_map = get_color_map()
-    cursor = 0
+    cursor = 0  # char idx, for better moving
 
     while True:
         # draw
-        for i, (sentence, win) in enumerate(zip(sentences, windows)):
-            draw(win, sentence, color_map=color_map, active=(s_idx == i))
+        for i, (sentence, pad, display_height) \
+                in enumerate(zip(sentences, pads_sent, display_heights)):
+            update_pad(pad, sentence, color_map=color_map, active=(s_idx == i))
+            pad_height, _ = pad.getmaxyx()
+            nrow_active = sentence.char_at_word(sentence.active) // width
+            first_row = min(max(nrow_active - display_height // 2, 0),
+                            pad_height - display_height)
+            pos_h = i * (display_height+1)
+            pad.noutrefresh(first_row, 0, pos_h, 0, pos_h + display_height - 1, width)
 
-        win_sel.clear()
-        win_sel.addstr(0, 0, " ".join(sentences[0].selection()) + " | " +
-                       " ".join(sentences[1].selection()))
+        win_select.clear()
+        win_select.addstr(0, 0, "0: " + " ".join(sentences[0].selection()))
+        win_select.addstr(1, 0, "1: " + " ".join(sentences[1].selection()))
+        win_select.noutrefresh()
+
         map_cur = repr(correspondance.current)
-        win_sel.addstr(1, 0, map_cur[:width - 4] + "..." * (len(map_cur) > width))
-        win_sel.noutrefresh()
+        win_map.addstr(0, 0, "..." * (len(map_cur) > width) + map_cur[-(width - 4):])
+        win_map.noutrefresh()
 
         def down(cursor, width, n_chars):
             next_cursor = cursor + width
@@ -263,6 +278,8 @@ def main(stdscr, sentences, correspondance):
             sentence.activate(sentence.word_at_char(cursor))
         if c in (ord("\t"), ):
             s_idx = (s_idx + 1) % len(sentences)
+            sentence = sentences[s_idx]
+            cursor = sentence.char_at_word(sentence.active)
         if c in (ord("K"), ord("J")):
             char_idx = sentence.char_at_word(sentence.active)
             s_idx = (s_idx + 1) % len(sentences)

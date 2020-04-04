@@ -31,10 +31,19 @@ def find_first(xs, cond, fail_return):
 
 
 class Sentence:
-    def __init__(self, words):
+    """ Representation of a sequence of words/tokens, aimed at helping
+    visualisation for processing (e.g tagging) in cli. Each token has a state:
+    -- 0: normal: unprocessed so far
+    -- 1: selected: undergoing processing
+    -- 2: fixed: already processed
+    Attr `active` represents a cursor position on the sequence, can be used to
+    move around the sequence and update words status.
+    """
+    def __init__(self, words, words_status=None, active=0):
         self.words = words
-        self.words_status = [0 for _ in self.words]
-        self.active = 0
+        self.words_status = ([0 for _ in self.words] if words_status is None
+                             else words_status)
+        self.active = active
 
     @property
     def char_len(self):
@@ -48,10 +57,7 @@ class Sentence:
             2: "fixed",
         }[i]
 
-    def set_status(self, idx, status):
-        self.words_status[idx] = status
-
-    def activate_closest_selectable(self, idx):
+    def activate_closest_nofixed(self, idx):
         if idx >= len(self.words):
             idx = len(self.words) - 1
         if self.words_status[idx] < 2:
@@ -104,6 +110,14 @@ class Sentence:
         def _process(s):
             return 2 if s == 1 else s
         self.words_status = list(map(_process, self.words_status))
+
+    def unfix(self, *idxs):
+        def _process(i_s):
+            idx, s = i_s
+            if idx in idxs:
+                return 1 if s == 2 else s
+            return s
+        self.words_status = list(map(_process, enumerate(self.words_status)))
 
     def selection(self):
         return [self.words[i] for i, s in enumerate(self.words_status) if s == 1]
@@ -182,7 +196,7 @@ def main(stdscr, sentences, correspondance):
     stdscr.refresh()
 
     s_idx = 0
-    width = 100
+    width = 80
     windows = []
     line = 0
     for sentence in sentences:
@@ -251,7 +265,7 @@ def main(stdscr, sentences, correspondance):
         if c in (ord("K"), ord("J")):
             char_idx = sentence.char_at_word(sentence.active)
             s_idx = (s_idx + 1) % len(sentences)
-            sentences[s_idx].activate_closest_selectable(
+            sentences[s_idx].activate_closest_nofixed(
                 sentences[s_idx].word_at_char(char_idx))
 
         ## selecting
@@ -267,13 +281,13 @@ def main(stdscr, sentences, correspondance):
                 correspondance.add(selections)
                 for sentence in sentences:
                     sentence.fix_selection()
-                    sentence.activate_closest_selectable(sentence.active)
+                    sentence.activate_closest_nofixed(sentence.active)
         if c in (curses.KEY_BACKSPACE, ):
             try:
                 selections_removed = correspondance.pop()
                 for sentence, selection in zip(sentences, selections_removed):
                     sentence.clear_selection()
-                    sentence.add_to_selection(selection)
+                    sentence.unfix(*selection)
             except IndexError:
                 pass
 

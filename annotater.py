@@ -300,22 +300,3 @@ def process_manually(tokens0, tokens1, map_):
     curses.wrapper(lambda stdscr: main(stdscr, sentences, correspondance))
 
     return sentences[0].words, sentences[1].words, correspondance.current
-
-
-if __name__ == "__main__":
-    def tokenize(sent):
-        return sent.split()
-
-    inp0 = "Hier , le chat a mangé la souris verte ."
-    inp1 = "Yesterday , the cat ate the green mouse ."
-    tokens0 = tokenize(inp0)
-    tokens1 = tokenize(inp1)
-
-    map_ = (([2, 3], [2, 3]), )
-
-    tokens0, tokens1, new_corresps = \
-        tuple(process_manually(tokens0, tokens1, map_))
-
-    print(tokens0)
-    print(tokens1)
-    print(new_corresps)

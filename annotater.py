@@ -158,9 +158,9 @@ class Sentence:
         return False
 
 
-class Correspondance:
-    def __init__(self, corresps):
-        self.source = tuple(corresps)
+class Mapping:
+    def __init__(self, map_):
+        self.source = tuple(map_)
         self._current = list(self.source)
 
     @property
@@ -173,8 +173,8 @@ class Correspondance:
     def clear(self):
         self._current = []
 
-    def pop(self):
-        return self._current.pop()
+    def pop(self, idx=-1):
+        return self._current.pop(idx)
 
     def add(self, value):
         self._current.append(value)
@@ -194,7 +194,25 @@ def refresh_pad(pad, start_line, n_lines, pos_h, width):
     pad.noutrefresh(start_line, 0, pos_h, 0, pos_h + n_lines-1, width)
 
 
-def main(stdscr, sentences, correspondance):
+def update_corresp(sent_idx, sentences, mapping):
+    def find_corresp(sent_idx, word_idx, mapping):
+        for i, corresp in enumerate(mapping.current):
+            if word_idx in corresp[sent_idx]:
+                return i, corresp
+        raise ValueError(f"Did not find corresp containing {word_idx}")
+
+    try:
+        sentence = sentences[sent_idx]
+        i, corresp = find_corresp(sent_idx, sentence.active, mapping)
+        for sentence, selection in zip(sentences, corresp):
+            sentence.clear_selection()
+            sentence.unfix(*selection)
+        mapping.pop(i)
+    except ValueError:
+        pass
+
+
+def main(stdscr, sentences, mapping):
     stdscr.clear()
     stdscr.noutrefresh()
 
@@ -231,7 +249,8 @@ def main(stdscr, sentences, correspondance):
         win_select.addstr(1, 0, "1: " + " ".join(sentences[1].selection()))
         win_select.noutrefresh()
 
-        map_cur = repr(correspondance.current)
+        map_cur = repr(mapping.current)
+        win_map.clear()
         win_map.addstr(0, 0, "..." * (len(map_cur) > width) + map_cur[-(width - 4):])
         win_map.noutrefresh()
 
@@ -296,18 +315,20 @@ def main(stdscr, sentences, correspondance):
             selections = (sentences[0].selection_idxs(),
                           sentences[1].selection_idxs())
             if selections[0] or selections[1]:
-                correspondance.add(selections)
+                mapping.add(selections)
                 for sentence in sentences:
                     sentence.fix_selection()
                     sentence.activate_closest_nofixed(sentence.active)
         if c in (curses.KEY_BACKSPACE, ):
             try:
-                selections_removed = correspondance.pop()
+                selections_removed = mapping.pop()
                 for sentence, selection in zip(sentences, selections_removed):
                     sentence.clear_selection()
                     sentence.unfix(*selection)
             except IndexError:
                 pass
+        if c in (ord("x"), ):
+            update_corresp(s_idx, sentences, mapping)
 
         ## tokenizing
         if c in (ord("i"), ):
@@ -315,7 +336,7 @@ def main(stdscr, sentences, correspondance):
             if changed:
                 for sentence in sentences:
                     sentence.words_status = [0 for _ in sentence.words]
-                correspondance.clear()
+                mapping.clear()
 
 
 def process_manually(tokens0, tokens1, map_):
@@ -327,8 +348,8 @@ def process_manually(tokens0, tokens1, map_):
         for selection, sentence in zip(corresp, sentences):
             sentence.add_to_selection(*selection)
             sentence.fix_selection()
-    correspondance = Correspondance(map_)
+    mapping = Mapping(map_)
 
-    curses.wrapper(lambda stdscr: main(stdscr, sentences, correspondance))
+    curses.wrapper(lambda stdscr: main(stdscr, sentences, mapping))
 
-    return sentences[0].words, sentences[1].words, correspondance.current
+    return sentences[0].words, sentences[1].words, mapping.current

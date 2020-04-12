@@ -4,8 +4,10 @@ import os
 data_folder_path = os.path.join(os.path.dirname(__file__), "data")
 data_path = os.path.join(data_folder_path, "data.json")
 TEXTS = {}
-with open(data_path) as f:
-    TEXTS = json.load(f)
+
+if os.path.exists(data_path):
+    with open(data_path) as f:
+        TEXTS = json.load(f)
 
 
 def get(id_):
@@ -73,7 +75,11 @@ class Entry:
         self.text_src = text_src
         self.texts = {text_src.lang: (text_src, None)}
 
-    def add(self, text, map_):
+    @property
+    def langs(self):
+        return tuple(self.texts)
+
+    def add(self, text, map_=()):
         self.texts[text.lang] = (text, map_)
 
     def get(self, lang):

@@ -1,4 +1,4 @@
-from flask import Flask, escape, request, render_template
+from flask import Flask, escape, render_template
 import operator
 import collections
 import data
@@ -52,8 +52,24 @@ def diff():
     return render_template("index.html", text_src=text_src, text_tgt=text_tgt)
 
 
+def langs(entry):
+    return filter(lambda s: s not in ("info", "src"), entry.to_dict())
+
+
+@app.route("/<t_id>")
+def text(t_id=None):
+    entry = data.get_entry(t_id)
+    max_size = 80
+    text_str = entry.text_src.str
+    preview = text_str[:max_size] + "..." * (len(text_str) >= max_size)
+    s = f"{entry.lang_src}: {preview}<br>"
+    def li(lang): return f"<li><a href='/{t_id}/{lang}'>{lang}</a></li>"
+    l = "<ul>" + "".join(map(li, langs(entry))) + "</ul>"
+    return s + l
+
+
 @app.route("/<t_id>/<target>")
-def text(target=None, t_id=None):
+def compare(target=None, t_id=None):
     tokens_src = [data.get_tokens(t_id, "src")]
     tokens_tgt = [data.get_tokens(t_id, target)]
     maps = [data.get_map(t_id, target)]

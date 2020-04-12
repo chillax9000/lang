@@ -51,6 +51,18 @@ def write_entry(id_, entry):
     TEXTS[id_] = entry.to_dict()
 
 
+def add_entry(entry):
+    i = 0
+    for i, id_int in enumerate(sorted(map(int, TEXTS.keys()))):
+        if i < id_int:
+            write_entry(str(i), entry)
+    write_entry(str(i+1), entry)
+
+
+def delete_entry(id_):
+    del TEXTS[id_]
+
+
 def commit():
     with open(data_path, "w") as f:
         json.dump(TEXTS, f)
@@ -80,6 +92,7 @@ class Entry:
         return tuple(self.texts)
 
     def add(self, text, map_=()):
+
         self.texts[text.lang] = (text, map_)
 
     def get(self, lang):

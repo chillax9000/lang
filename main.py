@@ -68,6 +68,11 @@ def text(t_id=None):
     return s + l
 
 
+@app.route("/api/<t_id>")
+def api_json(t_id=None):
+    return data.get_entry(t_id).to_dict()
+
+
 @app.route("/<t_id>/<target>")
 def compare(target=None, t_id=None):
     tokens_src = [data.get_tokens(t_id, "src")]

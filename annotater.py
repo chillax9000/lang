@@ -1,13 +1,20 @@
 import curses
+import enum
 import tempfile
 import subprocess
 
 
+class Status(enum.Enum):
+    normal = 0      # unprocessed so far
+    selected = 1    # to be processed
+    fixed = 2       # already processed
+
+
 def get_color_map():
     color_base = {
-            "normal": curses.COLOR_WHITE,
-            "selected": curses.COLOR_GREEN,
-            "fixed": curses.COLOR_RED,
+            Status.normal.name: curses.COLOR_WHITE,
+            Status.selected.name: curses.COLOR_GREEN,
+            Status.fixed.name: curses.COLOR_RED,
     }
 
     color_map = {}
@@ -32,35 +39,25 @@ def find_first(xs, cond, fail_return):
 
 class Sentence:
     """ Representation of a sequence of words/tokens, aimed at helping
-    visualisation for processing (e.g tagging) in cli. Each token has a state:
-    -- 0: normal: unprocessed so far
-    -- 1: selected: undergoing processing
-    -- 2: fixed: already processed
+    visualisation for processing (e.g tagging) in cli. Each token has a status,
+    listed in `word_status`.
     Attr `active` represents a cursor position on the sequence, can be used to
     move around the sequence and update words status.
     """
     def __init__(self, words, words_status=None, active=0):
         self.words = words
-        self.words_status = ([0 for _ in self.words] if words_status is None
-                             else words_status)
+        self.words_status = ([Status.normal for _ in self.words]
+                             if words_status is None else words_status)
         self.active = active
 
     @property
     def char_len(self):
         return sum(list(map(lambda w: len(w) + 1, self.words)))
 
-    @staticmethod
-    def status_name(i):
-        return {
-            0: "normal",
-            1: "selected",
-            2: "fixed",
-        }[i]
-
     def activate_closest_nofixed(self, idx):
         if idx >= len(self.words):
             idx = len(self.words) - 1
-        if self.words_status[idx] < 2:
+        if self.words_status[idx] is not Status.fixed:
             self.activate(idx)
         else:
             idx_next = self.next_nofixed(idx)
@@ -84,7 +81,7 @@ class Sentence:
     def next_nofixed(self, idx=None):
         idx = self.active if idx is None else idx
         i, _ = find_first(self.words_status[idx + 1:],
-                          lambda status: status < 2,
+                          lambda status: status is not Status.fixed,
                           (-1, None))
         return idx + i + 1
 
@@ -92,38 +89,42 @@ class Sentence:
         idx = self.active if idx is None else idx
         idxs = [s for i, s in enumerate(self.words_status) if i < idx]
         i, _ = find_first(idxs[::-1],
-                          lambda status: status < 2,
+                          lambda status: status is not Status.fixed,
                           (-1, None))
         return idx - i - 1
 
     def add_to_selection(self, *idxs):
         for idx in idxs:
-            if self.words_status[idx] < 2:
-                self.words_status[idx] = (self.words_status[idx] + 1) % 2
+            st = self.words_status[idx]
+            if st is not Status.fixed:
+                self.words_status[idx] = (Status.normal if st is Status.selected
+                                          else Status.selected)
 
     def clear_selection(self):
         def _process(s):
-            return 0 if s == 1 else s
+            return Status.normal if s == Status.selected else s
         self.words_status = list(map(_process, self.words_status))
 
     def fix_selection(self):
         def _process(s):
-            return 2 if s == 1 else s
+            return Status.fixed if s == Status.selected else s
         self.words_status = list(map(_process, self.words_status))
 
     def unfix(self, *idxs):
         def _process(i_s):
             idx, s = i_s
             if idx in idxs:
-                return 1 if s == 2 else s
+                return Status.selected if s == Status.fixed else s
             return s
         self.words_status = list(map(_process, enumerate(self.words_status)))
 
     def selection(self):
-        return [self.words[i] for i, s in enumerate(self.words_status) if s == 1]
+        return [self.words[i] for i, s in enumerate(self.words_status)
+                if s == Status.selected]
 
     def selection_idxs(self):
-        return [i for i, s in enumerate(self.words_status) if s == 1]
+        return [i for i, s in enumerate(self.words_status)
+                if s == Status.selected]
 
     def word_at_char(self, char_idx):
         total = 0
@@ -153,7 +154,7 @@ class Sentence:
         words = text_out.split()
         if self.words != words:
             self.words = words
-            self.words_status = [0 for _ in self.words]
+            self.words_status = [Status.normal for _ in self.words]
             return True
         return False
 
@@ -171,7 +172,7 @@ class Mapping:
         self._current = list(self.source)
 
     def clear(self):
-        self._current = []
+        self._current.clear()
 
     def pop(self, idx=-1):
         return self._current.pop(idx)
@@ -183,7 +184,7 @@ class Mapping:
 def update_pad(pad, sentence, color_map, active=False):
     pad.clear()
     for i, word in enumerate(sentence.words):
-        color = color_map[sentence.status_name(sentence.words_status[i])
+        color = color_map[sentence.words_status[i].name
                           + "_active" * (i == sentence.active)
                           + "_waiting" * (not active and i == sentence.active)]
         pad.addstr(word, color)
@@ -335,7 +336,7 @@ def main(stdscr, sentences, mapping):
             changed = sentence.split()
             if changed:
                 for sentence in sentences:
-                    sentence.words_status = [0 for _ in sentence.words]
+                    sentence.words_status = [Status.normal for _ in sentence.words]
                 mapping.clear()
 
 

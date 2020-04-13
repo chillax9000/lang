@@ -228,7 +228,9 @@ def main(stdscr, sentences, mapping):
     display_heights = [min(h, max_display_height) for h in heights]
     win_select = curses.newwin(2, width, sum(display_heights) + 2, 0)
     win_map = curses.newwin(1, width, sum(display_heights) + 3 + len(sentences), 0)
-    # todo: replace wins by pads
+
+    def prune(s, width_=width):
+        return "..." * (len(s) > width_) + s[-width_ + 4:]
 
     color_map = get_color_map()
     cursor = 0  # char idx, for better moving
@@ -246,13 +248,15 @@ def main(stdscr, sentences, mapping):
             pad.noutrefresh(first_row, 0, pos_h, 0, pos_h + display_height - 1, width)
 
         win_select.clear()
-        win_select.addstr(0, 0, "0: " + " ".join(sentences[0].selection()))
-        win_select.addstr(1, 0, "1: " + " ".join(sentences[1].selection()))
+        win_select.addstr(0, 0, "0: " +
+                          prune(" ".join(sentences[0].selection()), width - 3))
+        win_select.addstr(1, 0, "1: " +
+                          prune(" ".join(sentences[1].selection()), width - 3))
         win_select.noutrefresh()
 
         map_cur = repr(mapping.current)
         win_map.clear()
-        win_map.addstr(0, 0, "..." * (len(map_cur) > width) + map_cur[-(width - 4):])
+        win_map.addstr(0, 0, prune(map_cur))
         win_map.noutrefresh()
 
         def down(cursor, width, n_chars):

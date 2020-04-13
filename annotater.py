@@ -1,4 +1,5 @@
 import curses
+import os
 import enum
 import tempfile
 import subprocess
@@ -26,6 +27,9 @@ def get_color_map():
         color_map[name] = curses.color_pair(3*i + 1)
         color_map[f"{name}_active"] = curses.color_pair(3*i + 2)
         color_map[f"{name}_active_waiting"] = curses.color_pair(3*i + 3)
+    j = 3*i + 4
+    curses.init_pair(j, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+    color_map["mode"] = curses.color_pair(j)
 
     return color_map
 
@@ -53,6 +57,16 @@ class Sentence:
     @property
     def char_len(self):
         return sum(list(map(lambda w: len(w) + 1, self.words)))
+
+    @property
+    def selected_words(self):
+        return [self.words[i] for i, s in enumerate(self.words_status)
+                if s == Status.selected]
+
+    @property
+    def selected_idxs(self):
+        return [i for i, s in enumerate(self.words_status)
+                if s == Status.selected]
 
     def activate_closest_nofixed(self, idx):
         if idx >= len(self.words):
@@ -117,14 +131,6 @@ class Sentence:
                 return Status.selected if s == Status.fixed else s
             return s
         self.words_status = list(map(_process, enumerate(self.words_status)))
-
-    def selection(self):
-        return [self.words[i] for i, s in enumerate(self.words_status)
-                if s == Status.selected]
-
-    def selection_idxs(self):
-        return [i for i, s in enumerate(self.words_status)
-                if s == Status.selected]
 
     def word_at_char(self, char_idx):
         total = 0
@@ -226,14 +232,22 @@ def main(stdscr, sentences, mapping):
         heights.append(sentence.char_len // width + 1)
         pads_sent.append(curses.newpad(heights[-1], width))
     display_heights = [min(h, max_display_height) for h in heights]
-    win_select = curses.newwin(2, width, sum(display_heights) + 2, 0)
-    win_map = curses.newwin(1, width, sum(display_heights) + 3 + len(sentences), 0)
+    line_select = sum(display_heights) + 2
+    win_select = curses.newwin(2, width, line_select, 0)
+    line_map = line_select + len(sentences)
+    win_map = curses.newwin(1, width, line_map, 0)
+    line_mode = line_map + 2
+    win_mode = curses.newwin(1, width, line_mode, 0)
 
     def prune(s, width_=width):
         return "..." * (len(s) > width_) + s[-width_ + 4:]
 
+    def mode_str(cont_sel, width_=width):
+        return prune("CONTINUOUS SELECTION" if cont_sel else "", width_)
+
     color_map = get_color_map()
     cursor = 0  # char idx, for better moving
+    continuous_selection = False
 
     while True:
         # draw
@@ -249,15 +263,19 @@ def main(stdscr, sentences, mapping):
 
         win_select.clear()
         win_select.addstr(0, 0, "0: " +
-                          prune(" ".join(sentences[0].selection()), width - 3))
+                          prune(" ".join(sentences[0].selected_words), width - 3))
         win_select.addstr(1, 0, "1: " +
-                          prune(" ".join(sentences[1].selection()), width - 3))
+                          prune(" ".join(sentences[1].selected_words), width - 3))
         win_select.noutrefresh()
 
         map_cur = repr(mapping.current)
         win_map.clear()
         win_map.addstr(0, 0, prune(map_cur))
         win_map.noutrefresh()
+        
+        win_mode.clear()
+        win_mode.addstr(0, 0, mode_str(continuous_selection), color_map["mode"])
+        win_mode.noutrefresh()
 
         def down(cursor, width, n_chars):
             next_cursor = cursor + width
@@ -317,8 +335,8 @@ def main(stdscr, sentences, mapping):
             for sentence in sentences:
                 sentence.clear_selection()
         if c in (curses.KEY_ENTER, 10, 13):  # \n, \r
-            selections = (sentences[0].selection_idxs(),
-                          sentences[1].selection_idxs())
+            selections = (sentences[0].selected_idxs,
+                          sentences[1].selected_idxs)
             if selections[0] or selections[1]:
                 mapping.add(selections)
                 for sentence in sentences:
@@ -334,6 +352,17 @@ def main(stdscr, sentences, mapping):
                 pass
         if c in (ord("x"), ):
             update_corresp(s_idx, sentences, mapping)
+        # continuous selection
+        if c in (ord("v"), ):
+            continuous_selection = not continuous_selection
+            if continuous_selection:
+                sentence.add_to_selection(sentence.active)
+        if continuous_selection and c in (ord("h"), ord("l")):
+            sentence.add_to_selection(sentence.active)
+
+        ## ESCAPE
+        if c == 27:
+            continuous_selection = False
 
         ## tokenizing
         if c in (ord("i"), ):
@@ -355,6 +384,7 @@ def process_manually(tokens0, tokens1, map_):
             sentence.fix_selection()
     mapping = Mapping(map_)
 
+    os.environ.setdefault('ESCDELAY', '25')  # reduce escape delay to use as any other key
     curses.wrapper(lambda stdscr: main(stdscr, sentences, mapping))
 
     return sentences[0].words, sentences[1].words, mapping.current

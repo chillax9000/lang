@@ -56,7 +56,9 @@ def add_entry(entry):
     for i, id_int in enumerate(sorted(map(int, TEXTS.keys()))):
         if i < id_int:
             write_entry(str(i), entry)
-    write_entry(str(i+1), entry)
+    new_id = str(i+1)
+    write_entry(new_id, entry)
+    return new_id
 
 
 def delete_entry(id_):

@@ -1,0 +1,42 @@
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="{{ url_for("static", filename="style.css") }}">
+</head>
+<script>
+    function highlightWordGroup(tagName) {
+        if (tagName != "group-None") {
+            for (word of document.getElementsByClassName(tagName)) {
+                word.style.backgroundColor = "yellow";
+            }
+        }
+    }
+    
+    function clearWords() {
+        for (word of document.getElementsByClassName("word")) {
+            word.style.backgroundColor = "transparent"; 
+        }
+    }
+</script>
+<div class="textmain">
+    <div class="flex-container-sided">
+        <div>
+        {% for line in text_src %}
+            <div class="line target">
+                {% for word, tagname in line %}
+                <span class="word {{ tagname }}" onmouseover="highlightWordGroup('{{ tagname }}')" onmouseout="clearWords()">{{ word }}</span>
+                {% endfor %}
+            </div>
+        {% endfor %}
+        </div>
+        <div>
+        {% for line in text_tgt %}
+            <div class="line source">
+                {% for word, tagname in line %}
+                <span class="word {{ tagname }}" onmouseover="highlightWordGroup('{{ tagname }}')" onmouseout="clearWords()">{{ word }}</span>
+                {% endfor %}
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+</div>
+</html>

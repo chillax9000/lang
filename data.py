@@ -93,6 +93,10 @@ class Entry:
     def langs(self):
         return tuple(self.texts)
 
+    @property
+    def target_langs(self):
+        return tuple(filter(lambda l: l != self.lang_src, self.texts))
+
     def add(self, text, map_=()):
 
         self.texts[text.lang] = (text, map_)

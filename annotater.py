@@ -78,17 +78,20 @@ class Sentence:
         return [i for i, w in enumerate(self.words)
                 if w.status == Status.selected]
 
-    def activate_closest_nofixed(self, ptr):
-        if ptr.value.status is not Status.fixed:
-            self.activate(ptr)
+    def closest_nofixed(self, ptr, distinct=False):
+        if ptr.value.status is not Status.fixed and not distinct:
+            return ptr
         else:
             _ptr = self.next_nofixed(ptr)
             if _ptr != ptr:
-                self .activate(_ptr)
-                return
+                return _ptr
             _ptr = self.prev_nofixed(ptr)
             if _ptr != ptr:
-                self .activate(_ptr)
+                return _ptr
+        return ptr
+
+    def activate_closest_nofixed(self, ptr):
+        self.activate(self.closest_nofixed(ptr))
 
     def activate(self, ptr):
         self.active = ptr
@@ -120,10 +123,10 @@ class Sentence:
         return ptr
 
     def add_to_selection(self, *ids):
-        for word in self.words:
-            if word.id in ids and word.status is not Status.fixed:
-                word.status = (Status.normal if word.status is Status.selected
-                               else Status.selected)
+        for w in self.words:
+            if w.id in ids and w.status is not Status.fixed:
+                w.status = (Status.normal if w.status is Status.selected
+                            else Status.selected)
 
     def clear_selection(self):
         for w in self.words:
@@ -155,6 +158,10 @@ class Sentence:
                 break
             total += len(w) + 1
         return total
+
+    def delete_word(self, ptr):
+        self.words.remove(ptr.value)
+        return ptr.value.id
 
     def retokenize(self):
         text = " ".join(self.words)
@@ -198,6 +205,9 @@ class Mapping:
 
     def add(self, value):
         self._current.append(value)
+
+    def __bool__(self):
+        return bool(self._current)
 
 
 def update_pad(pad, sentence, color_map, active=False):
@@ -287,6 +297,7 @@ def main(stdscr, sentences, mapping):
 
         win_mode.clear()
         win_mode.addstr(0, 0, mode_str(continuous_selection), color_map["mode"])
+        win_mode.addstr(0, 0, str(sentences[s_idx].active.value), color_map["mode"])
         win_mode.noutrefresh()
 
         def down(cursor, width, n_chars):
@@ -355,15 +366,13 @@ def main(stdscr, sentences, mapping):
                     sentence.fix_selection()
                     sentence.activate_closest_nofixed(sentence.active)
         if c in (curses.KEY_BACKSPACE, ):
-            try:
+            if mapping:
                 selections_removed = mapping.pop()
                 for sentence, selection in zip(sentences, selections_removed):
                     sentence.clear_selection()
                     sentence.unfix(*selection)
-            except IndexError:
-                pass
-        if c in (ord("x"), ):
-            update_corresp(s_idx, sentences, mapping)
+        # if c in (ord("x"), ):
+        #     update_corresp(s_idx, sentences, mapping)
         # continuous selection
         if c in (ord("v"), ):
             continuous_selection = not continuous_selection
@@ -383,6 +392,10 @@ def main(stdscr, sentences, mapping):
                 for sentence in sentences:
                     sentence.words = [Status.normal for _ in sentence.words]
                 mapping.clear()
+        if c in (ord("x"), ):
+            close_ptr = sentence.closest_nofixed(sentence.active, distinct=True)
+            sentence.delete_word(sentence.active)
+            sentence.activate(close_ptr)
 
 
 def process_manually(tokens0, tokens1, map_):
@@ -400,3 +413,8 @@ def process_manually(tokens0, tokens1, map_):
     curses.wrapper(lambda stdscr: main(stdscr, sentences, mapping))
 
     return sentences[0].words, sentences[1].words, mapping.current
+
+
+if __name__ == "__main__":
+    process_manually(("un chat noir marche, dans la rue" * 6).split(),
+                     ("ye gorbe sia walks, in the street" * 5).split(), ())

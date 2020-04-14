@@ -68,18 +68,19 @@ class Sentence:
         return [i for i, s in enumerate(self.words_status)
                 if s == Status.selected]
 
-    def activate_closest_nofixed(self, idx):
-        if idx >= len(self.words):
-            idx = len(self.words) - 1
-        if self.words_status[idx] is not Status.fixed:
-            self.activate(idx)
+    def closest_nofixed(self, idx, distinct=False):
+        if self.words_status[idx] is not Status.fixed and not distinct:
+            return idx
         else:
             idx_next = self.next_nofixed(idx)
             idx_prev = self.prev_nofixed(idx)
-            if idx - idx_prev < idx_next - idx:
-                self.activate(idx_prev)
+            if 0 < idx - idx_prev < idx_next - idx:
+                return idx_prev
             else:
-                self.activate(idx_next)
+                return idx_next
+
+    def activate_closest_nofixed(self, idx):
+        self.activate(self.closest_nofixed(idx))
 
     def activate(self, idx):
         self.active = idx
@@ -119,10 +120,21 @@ class Sentence:
             return Status.normal if s == Status.selected else s
         self.words_status = list(map(_process, self.words_status))
 
+    def clear_statuses(self):
+        self.words_status = [Status.normal for _ in self.words]
+
     def fix_selection(self):
         def _process(s):
             return Status.fixed if s == Status.selected else s
         self.words_status = list(map(_process, self.words_status))
+
+    def unselect(self, *idxs):
+        def _process(i_s):
+            idx, s = i_s
+            if idx in idxs:
+                return Status.normal if s == Status.selected else s
+            return s
+        self.words_status = list(map(_process, enumerate(self.words_status)))
 
     def unfix(self, *idxs):
         def _process(i_s):
@@ -163,6 +175,30 @@ class Sentence:
             self.words_status = [Status.normal for _ in self.words]
             return True
         return False
+
+
+def delete_word(sent_idx, word_idx, sentences, mapping):
+    sentences[sent_idx].words.pop(word_idx)
+    sentences[sent_idx].words_status.pop(word_idx)
+
+    current_mapping = []
+    for i, corresp in enumerate(mapping.current):
+        selection = corresp[sent_idx]
+        if word_idx not in selection:
+            new_corresp = list(corresp)
+            new_corresp[sent_idx] = [j - 1 if j > word_idx else j
+                                     for j in selection]
+            current_mapping.append(new_corresp)
+
+    mapping._current = current_mapping
+
+    for sentence in sentences:
+        sentence.clear_statuses()
+
+    for corresp in mapping.current:
+        for selection, sentence in zip(corresp, sentences):
+            sentence.add_to_selection(*selection)
+            sentence.fix_selection()
 
 
 class Mapping:
@@ -351,7 +387,9 @@ def main(stdscr, sentences, mapping):
             except IndexError:
                 pass
         if c in (ord("x"), ):
-            update_corresp(s_idx, sentences, mapping)
+            idx = sentence.closest_nofixed(sentence.active)
+            delete_word(s_idx, sentence.active, sentences, mapping)
+            sentence.activate(min(idx, len(sentence.words) - 1))
         # continuous selection
         if c in (ord("v"), ):
             continuous_selection = not continuous_selection

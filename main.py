@@ -1,7 +1,7 @@
-from flask import Flask, escape, render_template
+from flask import Flask, render_template
 import operator
 import collections
-import data
+from data import DAO
 
 app = Flask(__name__)
 
@@ -24,7 +24,9 @@ def diff():
 
 @app.route("/<t_id>")
 def text(t_id=None):
-    entry = data.get_entry(t_id)
+    entry = DAO.get_entry(t_id)
+    if entry is None:
+        return f"entry of id {t_id} not found", 404
     max_size = 80
     text_str = entry.text_src.str
     preview = text_str[:max_size] + "..." * (len(text_str) >= max_size)
@@ -36,14 +38,15 @@ def text(t_id=None):
 
 @app.route("/api/<t_id>")
 def api_json(t_id=None):
-    return data.get_entry(t_id).to_dict()
+    return DAO.get_entry(t_id).to_dict()
 
 
 @app.route("/<t_id>/<target>")
 def compare_line(target=None, t_id=None):
-    tokens_src = [data.get_tokens(t_id, "src")]
-    tokens_tgt = [data.get_tokens(t_id, target)]
-    maps = [data.get_map(t_id, target)]
+    entry = DAO.get_entry(t_id)
+    tokens_src = [entry.text_src.tokens]
+    tokens_tgt = [entry.get_text(target).tokens]
+    maps = [entry.get_map(target)]
     text_src = []
     text_tgt = []
     for line, (sent0, sent1, map_) in enumerate(zip(tokens_src,
@@ -57,9 +60,10 @@ def compare_line(target=None, t_id=None):
 
 @app.route("/<t_id>/<target>/sided")
 def compare_side(target=None, t_id=None):
-    tokens_src = [data.get_tokens(t_id, "src")]
-    tokens_tgt = [data.get_tokens(t_id, target)]
-    maps = [data.get_map(t_id, target)]
+    entry = DAO.get_entry(t_id)
+    tokens_src = [entry.text_src.tokens]
+    tokens_tgt = [entry.get_text(target).tokens]
+    maps = [entry.get_map(target)]
     text_src = []
     text_tgt = []
     for line, (sent0, sent1, map_) in enumerate(zip(tokens_src,

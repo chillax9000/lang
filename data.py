@@ -1,73 +1,81 @@
 import json
 import os
+import pymongo
+
 
 data_folder_path = os.path.join(os.path.dirname(__file__), "data")
-data_path = os.path.join(data_folder_path, "data.json")
-TEXTS = {}
-
-if os.path.exists(data_path):
-    with open(data_path) as f:
-        TEXTS = json.load(f)
+default_data_path = os.path.join(data_folder_path, "data.json")
 
 
-def get(id_):
-    return TEXTS[id_] if id_ in TEXTS else None
+class EntryDAO:
+    def get_entry(id_):
+        raise NotImplementedError
+
+    def write_entry(self, id_, entry):
+        raise NotImplementedError
+
+    def add_entry(self, entry):
+        raise NotImplementedError
+
+    def delete_entry(self, id_):
+        raise NotImplementedError
 
 
-def get_info(id_):
-    return TEXTS[id_]["info"] if id_ in TEXTS else None
+class JsonDAO(EntryDAO):
+    def __init__(self, data_path=default_data_path):
+        self.data_path = data_path
+        self.texts = {}
+
+        if os.path.exists(self.data_path):
+            with open(self.data_path) as f:
+                self.texts = json.load(f)
+
+    def get_entry(self, id_):
+        return Entry.from_dict(self.texts[id_])
+
+    def write_entry(self, id_, entry):
+        self.texts[id_] = entry.to_dict()
+
+    def add_entry(self, entry):
+        i = 0
+        for i, id_int in enumerate(sorted(map(int, self.texts.keys()))):
+            if i < id_int:
+                self.write_entry(str(i), entry)
+        new_id = str(i+1)
+        self.write_entry(new_id, entry)
+        return new_id
+
+    def delete_entry(self, id_):
+        del self.texts[id_]
+
+    def commit(self):
+        with open(self.data_path, "w") as f:
+            json.dump(self.texts, f)
 
 
-def get_all():
-    for i, d in TEXTS.items():
-        return i, d
+class MongoDAO(EntryDAO):
+    def __init__(self, client_getter, db_name, collection_name):
+        self.client = client_getter()
+        self.db = getattr(self.client, db_name)
+        self.texts = getattr(self.db, collection_name)
 
+    def get_entry(self, id_):
+        doc = self.texts.find_one({"_id": id_})
+        if "_id" in doc:
+            del doc["_id"]
+        print(doc)
+        return Entry.from_dict(doc)
 
-def write_map(id_, lang, map_):
-    TEXTS[id_][lang]["map"] = map_
+    def write_entry(self, id_, entry):
+        entry_dict = entry.do_dict()
+        entry_dict["_id"] = id_
+        self.texts.insert(entry_dict)
 
+    def add_entry(self, entry):
+        self.texts.insert(entry.to_dict())
 
-def write_tokens(id_, lang, tokens):
-    TEXTS[id_][lang]["tokens"] = tokens
-
-
-def get_map(id_, lang):
-    return TEXTS[id_][lang]["map"]
-
-
-def get_tokens(id_, lang):
-    return TEXTS[id_][lang]["tokens"]
-
-
-def get_text(id_, lang):
-    return TEXTS[id_][lang]["text"]
-
-
-def get_entry(id_):
-    return Entry.from_dict(TEXTS[id_])
-
-
-def write_entry(id_, entry):
-    TEXTS[id_] = entry.to_dict()
-
-
-def add_entry(entry):
-    i = 0
-    for i, id_int in enumerate(sorted(map(int, TEXTS.keys()))):
-        if i < id_int:
-            write_entry(str(i), entry)
-    new_id = str(i+1)
-    write_entry(new_id, entry)
-    return new_id
-
-
-def delete_entry(id_):
-    del TEXTS[id_]
-
-
-def commit():
-    with open(data_path, "w") as f:
-        json.dump(TEXTS, f)
+    def delete_entry(self, id_):
+        self.texts.find_one_and_delete({"_id": id_})
 
 
 class Text:
@@ -131,3 +139,6 @@ class Entry:
         base.update({lang: {**text.to_dict(), "map": map_}
                      for lang, (text, map_) in self.texts.items() if map_ is not None})
         return base
+
+
+DAO = MongoDAO(pymongo.MongoClient, "lang_db", "text")

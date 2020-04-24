@@ -7,6 +7,10 @@ data_folder_path = os.path.join(os.path.dirname(__file__), "data")
 default_data_path = os.path.join(data_folder_path, "data.json")
 
 
+class EntryNotFoundError(Exception):
+    pass
+
+
 class EntryDAO:
     def get_entry(id_):
         raise NotImplementedError
@@ -31,7 +35,10 @@ class JsonDAO(EntryDAO):
                 self.texts = json.load(f)
 
     def get_entry(self, id_):
-        return Entry.from_dict(self.texts[id_])
+        try:
+            return Entry.from_dict(self.texts[id_])
+        except KeyError:
+            raise EntryNotFoundError()
 
     def write_entry(self, id_, entry):
         self.texts[id_] = entry.to_dict()
@@ -59,12 +66,25 @@ class MongoDAO(EntryDAO):
         self.db = getattr(self.client, db_name)
         self.texts = getattr(self.db, collection_name)
 
+    @staticmethod
+    def _doc_to_entry(doc):
+        if "_id" in doc:
+            _id = doc["_id"]
+            del doc["_id"]
+        return Entry.from_dict(doc), _id
+
     def get_entry(self, id_):
         doc = self.texts.find_one({"_id": id_})
-        if "_id" in doc:
-            del doc["_id"]
-        print(doc)
-        return Entry.from_dict(doc)
+        if doc is None:
+            raise EntryNotFoundError()
+        entry, _ = self._doc_to_entry(doc)
+        return entry
+
+    def iter_all(self, limit=None):
+        for count, doc in enumerate(self.texts.find({})):
+            if count >= limit:
+                return
+            yield self._doc_to_entry(doc)
 
     def write_entry(self, id_, entry):
         entry_dict = entry.do_dict()

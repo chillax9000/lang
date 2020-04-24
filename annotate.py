@@ -5,11 +5,11 @@ import subprocess
 import argparse
 
 
-def get_entry(args):
+def get_entry(args, dao):
     if args.id is not None:
         try:
-            entry = data.get_entry(args.id)
-        except KeyError:
+            entry = dao.get_entry(args.id)
+        except data.EntryNotFoundError:
             print(f"entry {args.id} not found")
             exit(0)
         print(f"{entry.lang_src}: {entry.text_src.str}")
@@ -24,8 +24,7 @@ def get_entry(args):
             exit(0)
 
         def save(entry):
-            data.write_entry(args.id, entry)
-            data.commit()
+            dao.write_entry(args.id, entry)
     elif args.new:
         lang_src = input("source language: ")
         entry = data.Entry(data.Text(lang_src, ask_for_text()))
@@ -33,8 +32,7 @@ def get_entry(args):
         entry.add(data.Text(lang_tgt, ask_for_text()))
 
         def save(entry):
-            data.add_entry(entry)
-            data.commit()
+            dao.add_entry(entry)
     else:
         print("Nothing to be done")
         exit(0)
@@ -73,7 +71,7 @@ if __name__ == "__main__":
     parser.add_argument("--new", action="store_true")
     args = parser.parse_args()
 
-    entry, lang_tgt, save = get_entry(args)
+    entry, lang_tgt, save = get_entry(args, data.DAO)
 
     text_src = entry.text_src
     text_tgt = entry.get_text(lang_tgt)

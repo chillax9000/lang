@@ -1,6 +1,7 @@
 from flask import Flask, render_template
 import operator
 import collections
+import data
 from data import DAO
 
 app = Flask(__name__)
@@ -19,14 +20,25 @@ def apply_map(sent0, sent1, map_, line_n):
 
 @app.route('/')
 def diff():
-    return "Hello"
+    def td(entry_id):
+        entry, _id = entry_id
+        size = 32
+        beginning = (entry.text_src.str[:size] +
+                     "..." * (len(entry.text_src.str) > size))
+        langs = ", ".join(map(lambda lg: f"<a href='/{_id}/{lg}'>{lg}</a>",
+                          entry.target_langs))
+        return (f"<td><a href='/{_id}'>{_id}. {beginning}</a></td>"
+                f"<td>{langs}</td>")
+    return "<table>" + "".join(map(lambda s: f"<tr>{s}</tr>",
+                               map(td, DAO.iter_all(limit=20)))) + "</table>"
 
 
 @app.route("/<t_id>")
 def text(t_id=None):
-    entry = DAO.get_entry(t_id)
-    if entry is None:
-        return f"entry of id {t_id} not found", 404
+    try:
+        entry = DAO.get_entry(t_id)
+    except data.EntryNotFoundError:
+        return f"entry `{t_id}` not found", 404
     max_size = 80
     text_str = entry.text_src.str
     preview = text_str[:max_size] + "..." * (len(text_str) >= max_size)
@@ -43,7 +55,10 @@ def api_json(t_id=None):
 
 @app.route("/<t_id>/<target>")
 def compare_line(target=None, t_id=None):
-    entry = DAO.get_entry(t_id)
+    try:
+        entry = DAO.get_entry(t_id)
+    except data.EntryNotFoundError:
+        return f"entry `{t_id}` not found", 404
     tokens_src = [entry.text_src.tokens]
     tokens_tgt = [entry.get_text(target).tokens]
     maps = [entry.get_map(target)]
@@ -60,7 +75,10 @@ def compare_line(target=None, t_id=None):
 
 @app.route("/<t_id>/<target>/sided")
 def compare_side(target=None, t_id=None):
-    entry = DAO.get_entry(t_id)
+    try:
+        entry = DAO.get_entry(t_id)
+    except data.EntryNotFoundError:
+        return f"entry `{t_id}` not found", 404
     tokens_src = [entry.text_src.tokens]
     tokens_tgt = [entry.get_text(target).tokens]
     maps = [entry.get_map(target)]

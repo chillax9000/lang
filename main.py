@@ -27,10 +27,15 @@ def diff():
                      "..." * (len(entry.text_src.str) > size))
         langs = ", ".join(map(lambda lg: f"<a href='/{_id}/{lg}'>{lg}</a>",
                           entry.target_langs))
-        return (f"<td><a href='/{_id}'>{_id}. {beginning}</a></td>"
+        return (f"<td>{_id}</td>"
+                f"<td><a href='/{_id}'>{beginning}</a></td>"
+                f"<td>{entry.lang_src}</td>"
                 f"<td>{langs}</td>")
-    return "<table>" + "".join(map(lambda s: f"<tr>{s}</tr>",
-                               map(td, DAO.iter_all(limit=20)))) + "</table>"
+    return ("<table>" +
+            "<th>id</th><th>text</th><th>src</th><th>targets</th>" +
+            "".join(map(lambda s: f"<tr>{s}</tr>",
+                    map(td, DAO.iter_all(limit=20)))) +
+            "</table>")
 
 
 @app.route("/<t_id>")

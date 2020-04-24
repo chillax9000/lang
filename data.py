@@ -89,13 +89,17 @@ class MongoDAO(EntryDAO):
     def write_entry(self, id_, entry):
         entry_dict = entry.do_dict()
         entry_dict["_id"] = id_
-        self.texts.insert(entry_dict)
+        self.texts.insert_one(entry_dict)
 
     def add_entry(self, entry):
-        self.texts.insert(entry.to_dict())
+        doc = entry.to_dict()
+        doc["_id"] = hash(doc["src"]["text"])
+        self.texts.insert_one(doc)
 
-    def delete_entry(self, id_):
-        self.texts.find_one_and_delete({"_id": id_})
+    def delete_entry(self, _id):
+        doc = self.texts.find_one_and_delete({"_id": _id})
+        del doc["_id"]
+        return Entry.from_dict(doc)
 
 
 class Text:
